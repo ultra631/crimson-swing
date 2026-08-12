@@ -14,11 +14,44 @@
   .hudItem .val { font-size:clamp(22px,5vw,34px); letter-spacing:1px; }
   .hudItem .lbl { font-size:clamp(10px,2vw,12px); text-transform:uppercase; letter-spacing:2px; opacity:.75; }
   #orbHud { color:#ffd54f; }
-  #menu, #gameover { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(15,8,30,.55); backdrop-filter:blur(3px); pointer-events:auto; text-align:center; padding:20px; }
-  h1 { font-size:clamp(34px,8vw,68px); font-weight:900; letter-spacing:2px; background:linear-gradient(180deg,#ff5a4e,#ffb347); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 4px 16px rgba(255,90,78,.45)); }
-  .sub { font-size:clamp(13px,3vw,17px); opacity:.85; max-width:480px; line-height:1.5; }
-  .btn { margin-top:10px; padding:14px 42px; border:none; border-radius:40px; font-size:clamp(16px,4vw,20px); font-weight:800; letter-spacing:1px; cursor:pointer; background:linear-gradient(180deg,#ff5a4e,#d63a30); color:#fff; box-shadow:0 6px 22px rgba(255,90,78,.5), inset 0 1px 0 rgba(255,255,255,.35); transition:transform .12s ease; }
-  .btn:active { transform:scale(.94); }
+  #menu, #gameover, #pause {
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    background:
+      radial-gradient(circle, rgba(0,0,0,.28) 1.1px, transparent 1.8px) 0 0/9px 9px,
+      linear-gradient(140deg, #c41520 0%, #8e0f16 48%, #232a6b 100%);
+    pointer-events:auto; text-align:center; padding:20px; overflow:hidden;
+  }
+  .comicFont { font-family:'Arial Black','Franklin Gothic Heavy',Impact,sans-serif; }
+  h1 {
+    font-family:'Arial Black','Franklin Gothic Heavy',Impact,sans-serif;
+    font-size:clamp(38px,9vw,80px); font-weight:900; letter-spacing:1px;
+    color:#ffd21f; -webkit-text-stroke:2.5px #101018;
+    text-shadow: 4px 4px 0 #101018, 8px 8px 0 rgba(0,0,0,.35);
+    transform:rotate(-3deg); position:relative; z-index:2; line-height:1.05;
+  }
+  .burst { position:relative; padding:26px 40px; }
+  .burst::before {
+    content:''; position:absolute; inset:-14px -30px; z-index:1;
+    background:#fff;
+    clip-path:polygon(50% 0%,58% 12%,72% 4%,74% 18%,90% 14%,86% 29%,100% 32%,91% 44%,100% 56%,88% 62%,96% 76%,81% 74%,82% 90%,68% 82%,62% 97%,52% 85%,42% 98%,38% 83%,24% 91%,27% 75%,10% 78%,18% 63%,2% 58%,13% 47%,0% 38%,14% 31%,7% 16%,24% 19%,24% 4%,38% 11%);
+    filter:drop-shadow(5px 6px 0 rgba(0,0,0,.4));
+  }
+  .sub { font-size:clamp(13px,3vw,16px); max-width:520px; line-height:1.55; color:#fff;
+    background:rgba(10,10,24,.55); border:2px solid rgba(255,255,255,.25); border-radius:10px; padding:10px 16px; position:relative; z-index:2; }
+  .kbd { display:inline-block; background:#ffd21f; color:#111; border:2px solid #111; border-radius:5px; padding:0 7px; font-weight:900; box-shadow:2px 2px 0 #111; font-size:.9em; }
+  .btn {
+    margin-top:10px; padding:14px 46px; cursor:pointer; position:relative; z-index:2;
+    font-family:'Arial Black',Impact,sans-serif; font-size:clamp(17px,4vw,22px); font-weight:900; letter-spacing:1px; text-transform:uppercase;
+    background:#ffd21f; color:#101018; border:3.5px solid #101018; border-radius:8px;
+    box-shadow:6px 6px 0 #101018; transform:skew(-4deg);
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .btn:active { transform:skew(-4deg) translate(4px,4px); box-shadow:2px 2px 0 #101018; }
+  .btnSec { background:#fff; padding:10px 30px; font-size:clamp(14px,3.2vw,17px); }
+  .webCorner { position:absolute; width:min(34vw,240px); opacity:.5; z-index:1; pointer-events:none; }
+  .webTL { top:-8px; left:-8px; }
+  .webBR { bottom:-8px; right:-8px; transform:rotate(180deg); }
+  #pauseBtn { position:absolute; top:14px; left:14px; pointer-events:auto; width:44px; height:44px; border-radius:10px; border:3px solid #101018; cursor:pointer; background:#ffd21f; color:#101018; font-size:20px; font-weight:900; box-shadow:3px 3px 0 #101018; }
   #finalScore { font-size:clamp(40px,10vw,80px); font-weight:900; color:#ffb347; text-shadow:0 4px 20px rgba(255,179,71,.5); }
   #bestLine, #orbLine { font-size:clamp(13px,3vw,16px); opacity:.8; }
   .hidden { display:none !important; }
@@ -36,21 +69,53 @@
   </div>
   <button id="muteBtn" class="hidden">🔊</button>
   <div id="combo"></div>
+  <button id="pauseBtn" class="hidden">II</button>
   <div id="menu">
-    <h1>CRIMSON SWING 3D</h1>
-    <div class="sub">Maintiens <b>ESPACE</b>, le <b>clic</b> ou ton <b>doigt</b> pour la toile — relâche pour te propulser.<br>
-    Dirige-toi avec <b>A/D</b>, les <b>flèches</b> ou en glissant ton doigt.<br>
-    Ramasse les <b style="color:#ffd54f">orbes</b>, évite les <b style="color:#ff8a80">drones</b> pis les buildings!</div>
-    <div class="sub hidden" id="padHint" style="color:#7ee8fa;">🎮 Manette détectée — <b>R2</b> pour la toile, <b>stick gauche</b> pour diriger</div>
-    <div class="sub" id="loadNote" style="color:#ffd54f;">Chargement des modèles 3D…</div>
-    <button class="btn" id="playBtn">JOUER</button>
+    <svg class="webCorner webTL" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <svg class="webCorner webBR" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <div class="burst"><h1>CRIMSON<br>SWING</h1></div>
+    <div class="sub"><span class="kbd">ESPACE</span> / <span class="kbd">CLIC</span> / <b>doigt</b> : lancer la toile — relâche pour te propulser!<br>
+    <span class="kbd">A</span><span class="kbd">D</span> ou glisse ton doigt pour te diriger.<br>
+    Ramasse les <b style="color:#ffd21f">orbes</b> ⭐, évite les <b style="color:#ff9a90">drones</b>!</div>
+    <div class="sub hidden" id="padHint">🎮 Manette détectée — <span class="kbd">R2</span> toile, <b>stick gauche</b> direction, <span class="kbd">START</span> pause</div>
+    <div class="sub" id="loadNote">Chargement des modèles 3D…</div>
+    <button class="btn" id="playBtn">Jouer</button>
+  </div>
+  <div id="pause" class="hidden">
+    <svg class="webCorner webTL" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <svg class="webCorner webBR" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <div class="burst"><h1>PAUSE</h1></div>
+    <button class="btn" id="resumeBtn">Reprendre</button>
+    <button class="btn btnSec" id="restartBtn">Recommencer</button>
+    <button class="btn btnSec" id="menuBtn">Menu principal</button>
   </div>
   <div id="gameover" class="hidden">
-    <div class="sub" style="letter-spacing:3px;text-transform:uppercase;" id="deathMsg">Chute!</div>
+    <svg class="webCorner webTL" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <svg class="webCorner webBR" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
+      <path d="M0 0 L100 100 M0 0 L100 40 M0 0 L40 100 M0 0 L100 12 M0 0 L12 100"/>
+      <path d="M22 4 Q26 22 4 26 M44 8 Q52 44 8 52 M66 12 Q78 66 12 78 M88 18 Q104 88 18 104" />
+    </svg>
+    <div class="burst"><h1 id="deathMsg">Chute!</h1></div>
     <div id="finalScore">0</div>
     <div id="orbLine">Orbes : 0</div>
     <div id="bestLine">Record : 0</div>
-    <button class="btn" id="retryBtn">REJOUER</button>
+    <button class="btn" id="retryBtn">Rejouer</button>
+    <button class="btn btnSec" id="menuBtn2">Menu principal</button>
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -4020,7 +4085,7 @@ const muteBtn=document.getElementById('muteBtn');
 muteBtn.addEventListener('click',()=>{ muted=!muted; muteBtn.textContent=muted?'🔇':'🔊'; if(master) master.gain.value=muted?0:0.9; });
 
 // ================= ÉTAT =================
-const S={MENU:0,PLAY:1,DEAD:2};
+const S={MENU:0,PLAY:1,DEAD:2,PAUSE:3};
 let state=S.MENU;
 let best=0;
 try{ best=parseInt(localStorage.getItem('cs3_best')||'0')||0; }catch(e){ best=0; }
@@ -4298,6 +4363,9 @@ function pollGamepad(){
   if(state===S.PLAY){
     if(swingDown&&!padWasDown){ initAudio(); holding=true; tryAttach(); }
     if(!swingDown&&padWasDown){ holding=false; detach(); }
+    if(startDown&&!padStartWas) pauseGame();
+  } else if(state===S.PAUSE){
+    if((startDown&&!padStartWas)||(swingDown&&!padWasDown)) resumeGame();
   } else {
     if((swingDown&&!padWasDown)||(startDown&&!padStartWas)) start();
   }
@@ -4612,6 +4680,39 @@ function loop(now){
 reset();
 requestAnimationFrame(loop);
 
+// ================= PAUSE =================
+function pauseGame(){
+  if(state!==S.PLAY) return;
+  state=S.PAUSE;
+  holding=false;
+  document.getElementById('pause').classList.remove('hidden');
+}
+function resumeGame(){
+  if(state!==S.PAUSE) return;
+  state=S.PLAY;
+  document.getElementById('pause').classList.add('hidden');
+}
+function goMenu(){
+  state=S.MENU;
+  holding=false;
+  document.getElementById('pause').classList.add('hidden');
+  document.getElementById('gameover').classList.add('hidden');
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('pauseBtn').classList.add('hidden');
+  document.getElementById('menu').classList.remove('hidden');
+}
+document.getElementById('pauseBtn').addEventListener('click', pauseGame);
+document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+document.getElementById('restartBtn').addEventListener('click', ()=>{ document.getElementById('pause').classList.add('hidden'); start(); });
+document.getElementById('menuBtn').addEventListener('click', goMenu);
+document.getElementById('menuBtn2').addEventListener('click', goMenu);
+window.addEventListener('keydown', e=>{
+  if(e.code==='Escape'||e.code==='KeyP'){
+    if(state===S.PLAY) pauseGame();
+    else if(state===S.PAUSE) resumeGame();
+  }
+});
+
 // ================= UI =================
 function start(){
   initAudio();
@@ -4621,6 +4722,7 @@ function start(){
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('pauseBtn').classList.remove('hidden');
   muteBtn.classList.remove('hidden');
 }
 document.getElementById('playBtn').addEventListener('click', start);
