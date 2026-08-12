@@ -51,6 +51,13 @@
   .webCorner { position:absolute; width:min(34vw,240px); opacity:.5; z-index:1; pointer-events:none; }
   .webTL { top:-8px; left:-8px; }
   .webBR { bottom:-8px; right:-8px; transform:rotate(180deg); }
+  #settings .row { display:flex; align-items:center; gap:14px; width:min(86vw,420px); color:#fff; position:relative; z-index:2;
+    background:rgba(10,10,24,.55); border:2px solid rgba(255,255,255,.25); border-radius:10px; padding:10px 16px; }
+  #settings .row label { flex:1; text-align:left; font-weight:700; font-size:clamp(13px,3vw,15px); }
+  #settings input[type=range] { flex:1.2; accent-color:#ffd21f; height:26px; cursor:pointer; }
+  .qbtn { padding:7px 13px; border:2.5px solid #101018; border-radius:6px; background:#fff; color:#101018; font-weight:900; cursor:pointer; box-shadow:3px 3px 0 #101018; font-size:12px; }
+  .qbtn.on { background:#ffd21f; }
+  .togBtn { min-width:64px; }
   #pauseBtn { position:absolute; top:14px; left:14px; pointer-events:auto; width:44px; height:44px; border-radius:10px; border:3px solid #101018; cursor:pointer; background:#ffd21f; color:#101018; font-size:20px; font-weight:900; box-shadow:3px 3px 0 #101018; }
   #finalScore { font-size:clamp(40px,10vw,80px); font-weight:900; color:#ffb347; text-shadow:0 4px 20px rgba(255,179,71,.5); }
   #bestLine, #orbLine { font-size:clamp(13px,3vw,16px); opacity:.8; }
@@ -86,6 +93,7 @@
     <div class="sub hidden" id="padHint">🎮 Manette détectée — <span class="kbd">R2</span> toile, <b>stick gauche</b> direction, <span class="kbd">START</span> pause</div>
     <div class="sub" id="loadNote">Chargement des modèles 3D…</div>
     <button class="btn" id="playBtn">Jouer</button>
+    <button class="btn btnSec" id="settingsBtn1">Paramètres</button>
   </div>
   <div id="pause" class="hidden">
     <svg class="webCorner webTL" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
@@ -99,7 +107,22 @@
     <div class="burst"><h1>PAUSE</h1></div>
     <button class="btn" id="resumeBtn">Reprendre</button>
     <button class="btn btnSec" id="restartBtn">Recommencer</button>
+    <button class="btn btnSec" id="settingsBtn2">Paramètres</button>
     <button class="btn btnSec" id="menuBtn">Menu principal</button>
+  </div>
+  <div id="settings" class="hidden" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;pointer-events:auto;text-align:center;padding:20px;overflow:hidden;background:radial-gradient(circle, rgba(0,0,0,.28) 1.1px, transparent 1.8px) 0 0/9px 9px, linear-gradient(140deg,#c41520 0%,#8e0f16 48%,#232a6b 100%);">
+    <div class="burst"><h1>RÉGLAGES</h1></div>
+    <div class="row"><label>🎵 Musique</label><input type="range" id="setMusic" min="0" max="100" step="5"></div>
+    <div class="row"><label>🔊 Effets sonores</label><input type="range" id="setSfx" min="0" max="100" step="5"></div>
+    <div class="row"><label>🕹️ Sensibilité direction</label><input type="range" id="setSteer" min="50" max="150" step="10"></div>
+    <div class="row"><label>📳 Vibration manette</label><button class="qbtn togBtn" id="setRumble">OUI</button></div>
+    <div class="row"><label>🎨 Qualité graphique</label>
+      <button class="qbtn" data-q="auto" id="qAuto">AUTO</button>
+      <button class="qbtn" data-q="high" id="qHigh">ÉLEVÉE</button>
+      <button class="qbtn" data-q="low" id="qLow">BASSE</button>
+    </div>
+    <div class="row"><label>🏆 Record : <span id="setBest">0</span></label><button class="qbtn" id="setResetBest">EFFACER</button></div>
+    <button class="btn" id="settingsBack">Retour</button>
   </div>
   <div id="gameover" class="hidden">
     <svg class="webCorner webTL" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#fff" stroke-width="1.4">
@@ -4037,8 +4060,8 @@ function initAudio(){
   try{
     AC = new (window.AudioContext||window.webkitAudioContext)();
     master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);
-    sfxGain=AC.createGain(); sfxGain.gain.value=0.8; sfxGain.connect(master);
-    musicGain=AC.createGain(); musicGain.gain.value=0.30; musicGain.connect(master);
+    sfxGain=AC.createGain(); sfxGain.gain.value=settings.sfx; sfxGain.connect(master);
+    musicGain=AC.createGain(); musicGain.gain.value=settings.music; musicGain.connect(master);
     startMusic();
   }catch(e){ AC=null; }
 }
@@ -4086,6 +4109,28 @@ muteBtn.addEventListener('click',()=>{ muted=!muted; muteBtn.textContent=muted?'
 
 // ================= ÉTAT =================
 const S={MENU:0,PLAY:1,DEAD:2,PAUSE:3};
+// ---- Paramètres (persistants) ----
+const settings = { music:0.30, sfx:0.80, rumble:true, quality:'auto', steer:1.0 };
+try{ Object.assign(settings, JSON.parse(localStorage.getItem('cs3_settings')||'{}')); }catch(e){}
+function saveSettings(){ try{ localStorage.setItem('cs3_settings', JSON.stringify(settings)); }catch(e){} }
+function applyAudioSettings(){
+  if(musicGain) musicGain.gain.value=settings.music;
+  if(sfxGain) sfxGain.gain.value=settings.sfx;
+}
+function applyQuality(){
+  if(settings.quality==='low'){ if(!qualityLowered) lowerQuality(); }
+  else if(settings.quality==='high'){ raiseQuality(); }
+  // 'auto': on laisse le détecteur décider
+}
+function raiseQuality(){
+  qualityLowered=false;
+  sun.castShadow=true;
+  renderer.shadowMap.enabled=true;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.75));
+  renderer.setSize(W,H);
+  scene.fog.far=520;
+  scene.traverse(o=>{ if(o.material) o.material.needsUpdate=true; });
+}
 let state=S.MENU;
 let best=0;
 try{ best=parseInt(localStorage.getItem('cs3_best')||'0')||0; }catch(e){ best=0; }
@@ -4111,7 +4156,7 @@ function reset(){
   player.vel.set(0, 0, -26);
   player.attached=false;
   dist=0; score=0; combo=0; comboTimer=0; orbCount=0; orbChain=0; orbChainTimer=0;
-  genZ=0; genRow=0; time=0; shake=0; steer=0;
+  genZ=0; genRow=0; time=0; shake=0; steer=0; flipT=0; rollT=0;
   for(let i=0;i<SCARF_N;i++){ scarfPos[i*3]=0; scarfPos[i*3+1]=24; scarfPos[i*3+2]=0; }
   genWorld(0);
   // ancrage garanti au départ
@@ -4348,6 +4393,7 @@ function getPad(){
   return null;
 }
 function rumble(strong,weak,ms){
+  if(!settings.rumble) return;
   const p=getPad();
   if(p&&p.vibrationActuator&&p.vibrationActuator.playEffect){
     try{ p.vibrationActuator.playEffect('dual-rumble',{duration:ms,strongMagnitude:strong,weakMagnitude:weak}); }catch(e){}
@@ -4390,9 +4436,11 @@ function tryAttach(){
     player.attached=true;
     player.anchor.copy(bestA.pos);
     player.ropeLen=player.anchor.distanceTo(player.pos);
+    flipT=0; rollT=0;
     SFX.attach(); rumble(0.15,0.45,70);
   }
 }
+let flipT=0, rollT=0;
 function detach(){
   if(!player.attached) return;
   player.attached=false;
@@ -4404,6 +4452,7 @@ function detach(){
     score+=50*combo;
     showCombo('COMBO x'+combo+'  +'+(50*combo));
     SFX.combo();
+    flipT=0.85; // front flip de style après un bon relâchement!
   }
 }
 function showCombo(t,col){
@@ -4432,7 +4481,7 @@ function update(dt){
   // direction latérale
   const steerIn = (keySteerL?-1:0)+(keySteerR?1:0) + padSteer + touchSteer;
   steer += (Math.max(-1,Math.min(1,steerIn)) - steer)*Math.min(1,10*dt);
-  player.vel.x += steer*38*dt;
+  player.vel.x += steer*38*settings.steer*dt;
   // rappel doux vers le couloir
   if(Math.abs(player.pos.x)>LANE-6) player.vel.x -= Math.sign(player.pos.x)*30*dt;
 
@@ -4498,6 +4547,8 @@ function update(dt){
         // toit: on atterrit et on court
         player.pos.y=b.h+0.6;
         if(player.vel.y<-18) addSparks(player.pos,5,'rgba(200,180,230,.9)','rgba(120,100,160,0)');
+        if(player.vel.y<-24) rollT=0.42; // roulade d'atterrissage!
+        flipT=0;
         player.vel.y=0;
         player.onRoof=true;
         player.vel.z*=(1-0.6*dt);
@@ -4563,31 +4614,51 @@ function render(dt){
   // héros: orientation
   hero.position.copy(player.pos);
   const tilt=Math.atan2(-player.vel.y, -player.vel.z)*0.4;
-  hero.rotation.x = player.onRoof ? 0 : tilt;
-  hero.rotation.z = -steer*0.4 - player.vel.x*0.012; // penche dans le virage
+  const diving = !player.attached && !player.onRoof && player.vel.y < -30;
+  let baseX = player.onRoof ? 0 : (diving ? tilt*1.9 : tilt); // en plongeon: tête première
+  // acrobaties: front flip après relâchement, roulade à l'atterrissage
+  if(flipT>0){ flipT-=dt; baseX -= (1 - flipT/0.85)*Math.PI*2; if(flipT<=0) flipT=0; }
+  if(rollT>0){ rollT-=dt; baseX -= (1 - rollT/0.42)*Math.PI*2; if(rollT<=0) rollT=0; }
+  hero.rotation.x = baseX;
+  hero.rotation.z += ((-steer*0.4 - player.vel.x*0.012) - hero.rotation.z)*Math.min(1,10*dt);
 
-  // héros: pose des membres
+  // héros: pose des membres — cibles interpolées (mouvements fluides)
+  const k=Math.min(1, 13*dt);
+  function pose(limb, tx, tz){
+    limb.rotation.x += (tx-limb.rotation.x)*k;
+    limb.rotation.z += (tz-limb.rotation.z)*k;
+  }
   if(player.attached){
-    // bras droit tendu vers l'ancrage, jambes qui traînent
+    // bras droit tendu vers l'ancrage, corps qui pompe, jambes qui traînent
     tmpV.copy(player.anchor).sub(player.pos).normalize();
-    armR.rotation.x = Math.atan2(-tmpV.z, -tmpV.y);
-    armR.rotation.z = -0.15;
-    armL.rotation.x = 0.5 + Math.sin(time*3)*0.12; armL.rotation.z = 0.4;
-    legR.rotation.x = -0.55 + Math.sin(time*5)*0.14;
-    legL.rotation.x = -0.80 + Math.sin(time*5+1.4)*0.14;
+    pose(armR, Math.atan2(-tmpV.z, -tmpV.y), -0.15);
+    pose(armL, 0.5 + Math.sin(time*3)*0.12, 0.4);
+    pose(legR, -0.55 + Math.sin(time*5)*0.14, 0.05);
+    pose(legL, -0.80 + Math.sin(time*5+1.4)*0.14, -0.05);
   } else if(player.onRoof){
-    // course sur le toit
     const run=time*11;
-    armR.rotation.x=Math.sin(run)*0.9;         armR.rotation.z=-0.08;
-    armL.rotation.x=Math.sin(run+Math.PI)*0.9; armL.rotation.z=0.08;
-    legR.rotation.x=Math.sin(run+Math.PI)*0.95;
-    legL.rotation.x=Math.sin(run)*0.95;
+    pose(armR, Math.sin(run)*0.9, -0.08);
+    pose(armL, Math.sin(run+Math.PI)*0.9, 0.08);
+    pose(legR, Math.sin(run+Math.PI)*0.95, 0);
+    pose(legL, Math.sin(run)*0.95, 0);
+  } else if(diving){
+    // plongeon du super-héros: bras collés le long du corps, jambes droites
+    pose(armR, -0.55, -0.16);
+    pose(armL, -0.55, 0.16);
+    pose(legR, 0.06+Math.sin(time*4)*0.05, 0.03);
+    pose(legL, -0.06+Math.cos(time*4)*0.05, -0.03);
+  } else if(holding){
+    // main tendue qui cherche une toile
+    pose(armR, 2.9, -0.25);
+    pose(armL, 1.6+Math.sin(time*6)*0.2, 0.6);
+    pose(legR, -0.3+Math.sin(time*7)*0.25, 0);
+    pose(legL, 0.2+Math.cos(time*7)*0.25, 0);
   } else {
-    // chute libre: bras écartés, jambes qui battent
-    armR.rotation.x=2.55+Math.sin(time*6)*0.15; armR.rotation.z=-0.7;
-    armL.rotation.x=2.55+Math.cos(time*6)*0.15; armL.rotation.z=0.7;
-    legR.rotation.x=-0.25+Math.sin(time*7)*0.3;
-    legL.rotation.x= 0.15+Math.cos(time*7)*0.3;
+    // chute libre: pose de parachutiste
+    pose(armR, 2.55+Math.sin(time*6)*0.15, -0.7);
+    pose(armL, 2.55+Math.cos(time*6)*0.15, 0.7);
+    pose(legR, -0.25+Math.sin(time*7)*0.3, 0);
+    pose(legL, 0.15+Math.cos(time*7)*0.3, 0);
   }
   hero.updateMatrixWorld(true);
 
@@ -4665,6 +4736,7 @@ function lowerQuality(){
   renderer.setSize(W,H);
   scene.fog.far=380;
 }
+applyQuality();
 let last=performance.now();
 function loop(now){
   requestAnimationFrame(loop);
@@ -4673,7 +4745,7 @@ function loop(now){
   const dt=Math.min(0.033, rawDt);
   perfT+=rawDt;
   perfAvg = perfAvg*0.95 + Math.min(rawDt*1000,100)*0.05;
-  if(!qualityLowered && perfT>4 && perfAvg>27) lowerQuality();
+  if(settings.quality==='auto' && !qualityLowered && perfT>4 && perfAvg>27) lowerQuality();
   update(dt);
   render(dt);
 }
@@ -4711,6 +4783,52 @@ window.addEventListener('keydown', e=>{
     if(state===S.PLAY) pauseGame();
     else if(state===S.PAUSE) resumeGame();
   }
+});
+
+// ================= PARAMÈTRES (panneau) =================
+let settingsFrom='menu';
+function openSettings(from){
+  settingsFrom=from;
+  document.getElementById(from==='menu'?'menu':'pause').classList.add('hidden');
+  document.getElementById('settings').classList.remove('hidden');
+  // refléter les valeurs
+  document.getElementById('setMusic').value = Math.round(settings.music/0.6*100);
+  document.getElementById('setSfx').value   = Math.round(settings.sfx*100);
+  document.getElementById('setSteer').value = Math.round(settings.steer*100);
+  document.getElementById('setRumble').textContent = settings.rumble?'OUI':'NON';
+  document.getElementById('setBest').textContent = best;
+  for(const q of ['qAuto','qHigh','qLow']) document.getElementById(q).classList.remove('on');
+  document.getElementById(settings.quality==='high'?'qHigh':settings.quality==='low'?'qLow':'qAuto').classList.add('on');
+}
+function closeSettings(){
+  document.getElementById('settings').classList.add('hidden');
+  document.getElementById(settingsFrom==='menu'?'menu':'pause').classList.remove('hidden');
+  saveSettings();
+}
+document.getElementById('settingsBtn1').addEventListener('click', ()=>openSettings('menu'));
+document.getElementById('settingsBtn2').addEventListener('click', ()=>openSettings('pause'));
+document.getElementById('settingsBack').addEventListener('click', closeSettings);
+document.getElementById('setMusic').addEventListener('input', e=>{ settings.music = (parseInt(e.target.value)/100)*0.6; applyAudioSettings(); });
+document.getElementById('setSfx').addEventListener('input', e=>{ settings.sfx = parseInt(e.target.value)/100; applyAudioSettings(); tone(660,0.1,'sine',0.25); });
+document.getElementById('setSteer').addEventListener('input', e=>{ settings.steer = parseInt(e.target.value)/100; });
+document.getElementById('setRumble').addEventListener('click', e=>{
+  settings.rumble=!settings.rumble;
+  e.target.textContent=settings.rumble?'OUI':'NON';
+  if(settings.rumble) rumble(0.4,0.4,120);
+});
+for(const q of ['qAuto','qHigh','qLow']){
+  document.getElementById(q).addEventListener('click', e=>{
+    settings.quality = e.target.dataset.q;
+    for(const q2 of ['qAuto','qHigh','qLow']) document.getElementById(q2).classList.remove('on');
+    e.target.classList.add('on');
+    if(settings.quality!=='low' && qualityLowered) raiseQuality();
+    applyQuality();
+  });
+}
+document.getElementById('setResetBest').addEventListener('click', ()=>{
+  best=0;
+  try{ localStorage.setItem('cs3_best','0'); }catch(e){}
+  document.getElementById('setBest').textContent='0';
 });
 
 // ================= UI =================
