@@ -64,8 +64,10 @@ const renderer = new THREE.WebGLRenderer({ canvas:cvs, antialias:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 renderer.setSize(W, H);
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xd9573f, 80, 420);
+scene.fog = new THREE.Fog(0xcfe3f2, 110, 520);
 const camera = new THREE.PerspectiveCamera(72, W/H, 0.1, 2000);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 window.addEventListener('resize', () => {
   W=window.innerWidth; H=window.innerHeight;
@@ -73,20 +75,37 @@ window.addEventListener('resize', () => {
   renderer.setSize(W,H);
 });
 
-// Lumières coucher de soleil
-scene.add(new THREE.HemisphereLight(0x7a2a63, 0x2b1055, 0.9));
-const sun = new THREE.DirectionalLight(0xffb347, 1.1);
-sun.position.set(40, 60, -80);
+// Lumières de jour
+scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x8a8676, 0.85));
+const sun = new THREE.DirectionalLight(0xfff2dd, 1.15);
+sun.position.set(40, 80, -40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+sun.shadow.camera.near = 10; sun.shadow.camera.far = 260;
+sun.shadow.camera.left = -70; sun.shadow.camera.right = 70;
+sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -70;
 scene.add(sun);
+scene.add(sun.target);
 
-// Ciel: sphère inversée avec dégradé + soleil (suivent le joueur)
+// Ciel: sphère inversée avec dégradé bleu + nuages peints (suivent le joueur)
 function gradientTexture(){
-  const c=document.createElement('canvas'); c.width=2; c.height=256;
+  const c=document.createElement('canvas'); c.width=512; c.height=256;
   const g=c.getContext('2d');
   const gr=g.createLinearGradient(0,0,0,256);
-  gr.addColorStop(0,'#2b1055'); gr.addColorStop(0.45,'#7a2a63');
-  gr.addColorStop(0.72,'#e0533f'); gr.addColorStop(1,'#ffb347');
-  g.fillStyle=gr; g.fillRect(0,0,2,256);
+  gr.addColorStop(0,'#2f6fd0'); gr.addColorStop(0.45,'#5a9be0');
+  gr.addColorStop(0.75,'#a8cdef'); gr.addColorStop(1,'#e8f2fa');
+  g.fillStyle=gr; g.fillRect(0,0,512,256);
+  // nuages: paquets de blobs radiaux semi-transparents
+  let s=42; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+  for(let n=0;n<26;n++){
+    const cx=rnd()*512, cy=30+rnd()*120, sc=0.6+rnd()*1.4;
+    for(let b=0;b<7;b++){
+      const bx=cx+(rnd()*2-1)*46*sc, by=cy+(rnd()*2-1)*10*sc, r=(9+rnd()*17)*sc;
+      const cg=g.createRadialGradient(bx,by,1,bx,by,r);
+      cg.addColorStop(0,'rgba(255,255,255,.85)'); cg.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle=cg; g.beginPath(); g.arc(bx,by,r,0,7); g.fill();
+    }
+  }
   return new THREE.CanvasTexture(c);
 }
 const skyGroup = new THREE.Group();
@@ -103,31 +122,98 @@ function glowTexture(inner, outer){
   g.fillStyle=gr; g.fillRect(0,0,128,128);
   return new THREE.CanvasTexture(c);
 }
-const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTexture('rgba(255,235,170,1)','rgba(255,170,70,0)'), fog:false, depthWrite:false }));
-sunSprite.scale.set(260,260,1);
-sunSprite.position.set(120, 110, -750);
+const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:glowTexture('rgba(255,252,235,1)','rgba(255,240,190,0)'), fog:false, depthWrite:false }));
+sunSprite.scale.set(200,200,1);
+sunSprite.position.set(200, 240, -700);
 skyGroup.add(sunSprite);
 scene.add(skyGroup);
 
-// Sol (rue)
-const groundMat = new THREE.MeshLambertMaterial({ color:0x1b1028 });
+// Sol: béton clair + vraie rue au centre + trottoirs
+const groundMat = new THREE.MeshLambertMaterial({ color:0xb7b1a4 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 4000), groundMat);
 ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
 scene.add(ground);
 
-// Textures de fenêtres (3 variantes partagées)
-function windowTexture(seed){
-  const c=document.createElement('canvas'); c.width=64; c.height=128;
+function asphaltTexture(){
+  const c=document.createElement('canvas'); c.width=128; c.height=256;
   const g=c.getContext('2d');
-  g.fillStyle='#241436'; g.fillRect(0,0,64,128);
-  g.fillStyle='rgba(255,200,120,.85)';
+  g.fillStyle='#3a3d42'; g.fillRect(0,0,128,256);
+  // grain
+  let s=7; const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
+  g.fillStyle='rgba(255,255,255,.05)';
+  for(let i=0;i<300;i++) g.fillRect(rnd()*128, rnd()*256, 1.5, 1.5);
+  // ligne centrale jaune pointillée
+  g.fillStyle='#e8c33a';
+  for(let y=0;y<256;y+=64) g.fillRect(61, y, 6, 34);
+  // lignes de rive blanches
+  g.fillStyle='rgba(240,240,240,.8)';
+  g.fillRect(4,0,3,256); g.fillRect(121,0,3,256);
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1, 60);
+  return t;
+}
+const road = new THREE.Mesh(new THREE.PlaneGeometry(15, 4000), new THREE.MeshLambertMaterial({ map:asphaltTexture() }));
+road.rotation.x = -Math.PI/2;
+road.position.y = 0.03;
+road.receiveShadow = true;
+scene.add(road);
+
+function tileTexture(){
+  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  const g=c.getContext('2d');
+  g.fillStyle='#cfc8ba'; g.fillRect(0,0,64,64);
+  g.strokeStyle='rgba(90,85,75,.45)'; g.lineWidth=2;
+  g.strokeRect(1,1,31,31); g.strokeRect(33,1,31,31);
+  g.strokeRect(1,33,31,31); g.strokeRect(33,33,31,31);
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(3, 900);
+  return t;
+}
+const sidewalkGeo = new THREE.BoxGeometry(6, 0.32, 4000);
+const sidewalkMat = new THREE.MeshLambertMaterial({ map:tileTexture() });
+const sidewalkL = new THREE.Mesh(sidewalkGeo, sidewalkMat);
+sidewalkL.position.set(-10.5, 0.16, 0); sidewalkL.receiveShadow=true; scene.add(sidewalkL);
+const sidewalkR = new THREE.Mesh(sidewalkGeo, sidewalkMat);
+sidewalkR.position.set(10.5, 0.16, 0); sidewalkR.receiveShadow=true; scene.add(sidewalkR);
+
+// Textures de façades (5 palettes de jour, fenêtres en verre)
+function facadeTexture(seed, wall, frame){
+  const c=document.createElement('canvas'); c.width=128; c.height=256;
+  const g=c.getContext('2d');
+  g.fillStyle=wall; g.fillRect(0,0,128,256);
   let s=seed;
   const rnd=()=>{ s=(s*9301+49297)%233280; return s/233280; };
-  for(let y=6;y<122;y+=12) for(let x=5;x<58;x+=11) if(rnd()<0.42) g.fillRect(x,y,6,7);
+  // léger grain de mur
+  g.fillStyle='rgba(0,0,0,.045)';
+  for(let i=0;i<160;i++) g.fillRect(rnd()*128, rnd()*256, 2, 2);
+  // grille de fenêtres encadrées
+  for(let y=14;y<236;y+=26){
+    for(let x=10;x<112;x+=24){
+      if(rnd()<0.06) continue; // quelques fenêtres manquantes
+      g.fillStyle=frame; g.fillRect(x-1.5,y-1.5,17,19);
+      const glass=g.createLinearGradient(x,y,x,y+16);
+      glass.addColorStop(0,'#9fd3dd'); glass.addColorStop(1,'#5f96a8');
+      g.fillStyle=glass; g.fillRect(x,y,14,16);
+      // reflet
+      g.fillStyle='rgba(255,255,255,.35)';
+      g.fillRect(x+1,y+1,4,14);
+    }
+  }
+  // bande de corniche en haut
+  g.fillStyle='rgba(0,0,0,.18)'; g.fillRect(0,0,128,8);
   const t=new THREE.CanvasTexture(c);
   return t;
 }
-const buildingMats = [1,2,3].map(i => new THREE.MeshLambertMaterial({ map:windowTexture(i*7+3) }));
+const buildingMats = [
+  facadeTexture(11,'#d9cfb8','#8f8674'),
+  facadeTexture(23,'#c9b896','#8a7c5e'),
+  facadeTexture(37,'#b5bcc4','#767d86'),
+  facadeTexture(51,'#c08a72','#7d5240'),
+  facadeTexture(67,'#a9bfce','#6f8492')
+].map(t => new THREE.MeshLambertMaterial({ map:t }));
+const ledgeMatBase = new THREE.MeshLambertMaterial({ color:0x5c5c60 });
+const acMat = new THREE.MeshLambertMaterial({ color:0x8e9296 });
 const boxGeo = new THREE.BoxGeometry(1,1,1);
 
 // Matériaux/géométries partagés pour entités
@@ -176,6 +262,7 @@ const legR=limb(0.92,0.13,matSuit2); legR.position.set( 0.19,-0.62,0); hero.add(
 const legL=limb(0.92,0.13,matSuit2); legL.position.set(-0.19,-0.62,0); hero.add(legL);
 // main droite: le point d'où part la toile
 const handR=new THREE.Object3D(); handR.position.set(0,-0.82,0); armR.add(handR);
+hero.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
 scene.add(hero);
 
 // Écharpe: ruban de positions récentes
@@ -259,15 +346,16 @@ const G=34;              // gravité (unités/s²)
 const LANE=44;           // demi-largeur du couloir
 let buildings=[], anchors=[], orbs=[], drones=[], sparks=[];
 let dist=0, score=0, combo=0, comboTimer=0, orbCount=0, orbChain=0, orbChainTimer=0;
-let genZ=0, time=0, shake=0, steer=0;
+let genZ=0, genRow=0, time=0, shake=0, steer=0;
 
 function clearEntities(){
-  for(const b of buildings) scene.remove(b.mesh);
+  for(const b of buildings) scene.remove(b.grp);
+  for(const pr of props) scene.remove(pr.grp);
   for(const a of anchors) scene.remove(a.spr);
   for(const o of orbs) scene.remove(o.spr);
   for(const d of drones) scene.remove(d.grp);
   for(const s of sparks) scene.remove(s.spr);
-  buildings=[]; anchors=[]; orbs=[]; drones=[]; sparks=[];
+  buildings=[]; anchors=[]; orbs=[]; drones=[]; sparks=[]; props=[];
 }
 function reset(){
   clearEntities();
@@ -275,7 +363,7 @@ function reset(){
   player.vel.set(0, 0, -26);
   player.attached=false;
   dist=0; score=0; combo=0; comboTimer=0; orbCount=0; orbChain=0; orbChainTimer=0;
-  genZ=0; time=0; shake=0; steer=0;
+  genZ=0; genRow=0; time=0; shake=0; steer=0;
   for(let i=0;i<SCARF_N;i++){ scarfPos[i*3]=0; scarfPos[i*3+1]=24; scarfPos[i*3+2]=0; }
   genWorld(0);
   // ancrage garanti au départ
@@ -291,13 +379,76 @@ function addAnchor(x,y,z){
 }
 function addBuilding(x,z){
   const w=8+Math.random()*10, d=8+Math.random()*10, h=10+Math.random()*30;
-  const mat=buildingMats[(Math.random()*3)|0].clone(); // clone: transparence individuelle (la texture reste partagée)
+  const grp=new THREE.Group();
+  const mat=buildingMats[(Math.random()*5)|0].clone(); // clone: transparence individuelle (la texture reste partagée)
   mat.transparent=true; mat.opacity=1;
   const mesh=new THREE.Mesh(boxGeo, mat);
   mesh.scale.set(w,h,d);
-  mesh.position.set(x, h/2, z);
-  scene.add(mesh);
-  buildings.push({ mesh, x, z, w, d, h });
+  mesh.position.y=h/2;
+  mesh.castShadow=true; mesh.receiveShadow=true;
+  grp.add(mesh);
+  // corniche
+  const ledgeMat=ledgeMatBase.clone(); ledgeMat.transparent=true;
+  const ledge=new THREE.Mesh(boxGeo, ledgeMat);
+  ledge.scale.set(w+0.7, 0.55, d+0.7);
+  ledge.position.y=h+0.22;
+  ledge.castShadow=true;
+  grp.add(ledge);
+  // unité de ventilation sur le toit, des fois
+  if(Math.random()<0.5){
+    const ac=new THREE.Mesh(boxGeo, acMat);
+    ac.scale.set(1.6,1.1,1.6);
+    ac.position.set((Math.random()*2-1)*w*0.25, h+1.0, (Math.random()*2-1)*d*0.25);
+    ac.castShadow=true;
+    grp.add(ac);
+  }
+  grp.position.set(x, 0, z);
+  scene.add(grp);
+  buildings.push({ mesh, grp, mats:[mat,ledgeMat], x, z, w, d, h });
+}
+// Props de rue: lampadaires et arbres sur les trottoirs
+const poleMat = new THREE.MeshLambertMaterial({ color:0x2f3338 });
+const lampMat = new THREE.MeshBasicMaterial({ color:0xfff2c0 });
+const trunkMat = new THREE.MeshLambertMaterial({ color:0x6b4a2f });
+const leafMat = new THREE.MeshLambertMaterial({ color:0x4d8f4a });
+const poleGeo = new THREE.CylinderGeometry(0.09,0.12,4.6,6);
+const lampGeo = new THREE.SphereGeometry(0.26,8,6);
+const trunkGeo = new THREE.CylinderGeometry(0.14,0.2,1.6,6);
+const leafGeo = new THREE.SphereGeometry(1.15,10,8);
+let props=[];
+function addLamp(x,z){
+  const g=new THREE.Group();
+  const p=new THREE.Mesh(poleGeo, poleMat); p.position.y=2.3; p.castShadow=true; g.add(p);
+  const l=new THREE.Mesh(lampGeo, lampMat); l.position.y=4.65; g.add(l);
+  g.position.set(x,0.3,z);
+  scene.add(g); props.push({ grp:g, z });
+}
+function addTree(x,z){
+  const g=new THREE.Group();
+  const t=new THREE.Mesh(trunkGeo, trunkMat); t.position.y=0.8; t.castShadow=true; g.add(t);
+  const f=new THREE.Mesh(leafGeo, leafMat);
+  f.position.y=2.2; f.scale.y=1.15;
+  f.castShadow=true;
+  g.add(f);
+  g.position.set(x,0.3,z);
+  scene.add(g); props.push({ grp:g, z });
+}
+// Passage piéton
+const crossTexture=(()=>{
+  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  const g=c.getContext('2d');
+  g.clearRect(0,0,64,64);
+  g.fillStyle='rgba(245,245,245,.92)';
+  for(let x=2;x<64;x+=13) g.fillRect(x,0,8,64);
+  return new THREE.CanvasTexture(c);
+})();
+const crossMat = new THREE.MeshLambertMaterial({ map:crossTexture, transparent:true });
+function addCrosswalk(z){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(14.6, 5), crossMat);
+  m.rotation.x=-Math.PI/2;
+  m.position.set(0, 0.06, z);
+  m.receiveShadow=true;
+  scene.add(m); props.push({ grp:m, z });
 }
 function genWorld(upToZ){
   while(genZ > upToZ - 320){
@@ -320,6 +471,12 @@ function genWorld(upToZ){
         orbs.push({ pos:spr.position, spr, taken:false, ph:Math.random()*6 });
       }
     }
+    // props de rue
+    genRow++;
+    const lampSide = (genRow%2===0)?-9:9;
+    addLamp(lampSide, z-6);
+    if(Math.random()<0.45) addTree((Math.random()<0.5?-1:1)*12.6, z-12);
+    if(genRow%5===0) addCrosswalk(z-10);
     // drones (plus fréquents avec la distance)
     const chance=Math.min(0.5, 0.10 + (-genZ)/2600);
     if(Math.random()<chance && genZ<-120){
@@ -337,7 +494,8 @@ function genWorld(upToZ){
   }
   // nettoyage derrière le joueur
   const cut = player.pos.z + 40;
-  buildings = buildings.filter(b => { if(b.z > cut){ scene.remove(b.mesh); return false; } return true; });
+  buildings = buildings.filter(b => { if(b.z > cut){ scene.remove(b.grp); return false; } return true; });
+  props     = props.filter(pr => { if(pr.z > cut){ scene.remove(pr.grp); return false; } return true; });
   anchors   = anchors.filter(a => { if(a.pos.z > cut){ scene.remove(a.spr); return false; } return true; });
   orbs      = orbs.filter(o => { if(o.pos.z > cut || o.taken){ scene.remove(o.spr); return false; } return true; });
   drones    = drones.filter(d => { if(d.grp.position.z > cut){ scene.remove(d.grp); return false; } return true; });
@@ -673,12 +831,17 @@ function render(dt){
       if(Math.abs(px-b.x)<b.w/2+0.8 && Math.abs(pz-b.z)<b.d/2+0.8 && py<b.h){ blocked=true; break; }
     }
     const target=blocked?0.22:1;
-    b.mesh.material.opacity += (target-b.mesh.material.opacity)*Math.min(1,8*dt);
+    for(const m of b.mats) m.opacity += (target-m.opacity)*Math.min(1,8*dt);
   }
 
-  // le ciel, le soleil et la rue suivent le joueur
+  // le ciel, le soleil, la rue et les trottoirs suivent le joueur
   skyGroup.position.z=player.pos.z;
   ground.position.z=player.pos.z-1000;
+  road.position.z=player.pos.z-1000;
+  sidewalkL.position.z=player.pos.z-1000;
+  sidewalkR.position.z=player.pos.z-1000;
+  sun.position.set(player.pos.x+45, 85, player.pos.z-20);
+  sun.target.position.set(player.pos.x, 0, player.pos.z-40);
 
   renderer.render(scene, camera);
 }
