@@ -138,18 +138,44 @@ const droneEyeMat = new THREE.MeshBasicMaterial({ color:0xff3b30 });
 const droneGeo = new THREE.SphereGeometry(1.1, 10, 8);
 const eyeGeo = new THREE.SphereGeometry(0.35, 8, 6);
 
-// ================= Héros =================
+// ================= Héros (personnage articulé) =================
 const player = {
   pos:new THREE.Vector3(0, 22, 0), vel:new THREE.Vector3(0, 0, -24),
-  attached:false, anchor:new THREE.Vector3(), ropeLen:0
+  attached:false, anchor:new THREE.Vector3(), ropeLen:0, onRoof:false
 };
 const hero = new THREE.Group();
-const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 1.15, 10), new THREE.MeshLambertMaterial({ color:0xd63a30 }));
-hero.add(torso);
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 10), new THREE.MeshLambertMaterial({ color:0xff5a4e }));
-head.position.y = 0.95; hero.add(head);
-const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.9, 8), new THREE.MeshLambertMaterial({ color:0x8c1f18 }));
-legs.position.y = -0.95; hero.add(legs);
+const matSuit  = new THREE.MeshLambertMaterial({ color:0xd63a30 });
+const matSuit2 = new THREE.MeshLambertMaterial({ color:0x8c1f18 });
+const matMask  = new THREE.MeshLambertMaterial({ color:0xff5a4e });
+// torse + bassin
+const torso = new THREE.Mesh(new THREE.BoxGeometry(0.66,0.95,0.40), matSuit);
+torso.position.y=0.15; hero.add(torso);
+const hips = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.35,0.36), matSuit2);
+hips.position.y=-0.50; hero.add(hips);
+// tête + yeux de masque (le héros regarde vers -Z, le sens du mouvement)
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.30,14,12), matMask);
+head.position.y=0.92; hero.add(head);
+const eyeMatM = new THREE.MeshBasicMaterial({ color:0xffffff });
+for(const s of [-1,1]){
+  const e=new THREE.Mesh(new THREE.SphereGeometry(0.10,8,6), eyeMatM);
+  e.scale.set(1,1.5,0.4);
+  e.position.set(0.12*s,0.96,-0.26);
+  hero.add(e);
+}
+// membres articulés: pivot à l'épaule/la hanche
+function limb(len, r, mat){
+  const g=new THREE.Group();
+  const geo=new THREE.CylinderGeometry(r, r*0.72, len, 8);
+  geo.translate(0,-len/2,0); // le pivot est en haut du membre
+  g.add(new THREE.Mesh(geo, mat));
+  return g;
+}
+const armR=limb(0.78,0.11,matSuit);  armR.position.set( 0.42,0.55,0); hero.add(armR);
+const armL=limb(0.78,0.11,matSuit);  armL.position.set(-0.42,0.55,0); hero.add(armL);
+const legR=limb(0.92,0.13,matSuit2); legR.position.set( 0.19,-0.62,0); hero.add(legR);
+const legL=limb(0.92,0.13,matSuit2); legL.position.set(-0.19,-0.62,0); hero.add(legL);
+// main droite: le point d'où part la toile
+const handR=new THREE.Object3D(); handR.position.set(0,-0.82,0); armR.add(handR);
 scene.add(hero);
 
 // Écharpe: ruban de positions récentes
@@ -158,12 +184,14 @@ const scarfPos = new Float32Array(SCARF_N*3);
 const scarfGeo = new THREE.BufferGeometry();
 scarfGeo.setAttribute('position', new THREE.BufferAttribute(scarfPos, 3));
 const scarf = new THREE.Line(scarfGeo, new THREE.LineBasicMaterial({ color:0xff5a4e, linewidth:3 }));
+scarf.frustumCulled = false; // BUGFIX: sinon l'écharpe disparaît loin de l'origine
 scene.add(scarf);
 
 // Toile
 const webGeo = new THREE.BufferGeometry();
 webGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
 const webLine = new THREE.Line(webGeo, new THREE.LineBasicMaterial({ color:0xffffff }));
+webLine.frustumCulled = false; // BUGFIX: la toile restait invisible après le premier swing (culling sur bounding sphere périmée)
 webLine.visible = false;
 scene.add(webLine);
 
@@ -263,7 +291,9 @@ function addAnchor(x,y,z){
 }
 function addBuilding(x,z){
   const w=8+Math.random()*10, d=8+Math.random()*10, h=10+Math.random()*30;
-  const mesh=new THREE.Mesh(boxGeo, buildingMats[(Math.random()*3)|0]);
+  const mat=buildingMats[(Math.random()*3)|0].clone(); // clone: transparence individuelle (la texture reste partagée)
+  mat.transparent=true; mat.opacity=1;
+  const mesh=new THREE.Mesh(boxGeo, mat);
   mesh.scale.set(w,h,d);
   mesh.position.set(x, h/2, z);
   scene.add(mesh);
@@ -284,7 +314,7 @@ function genWorld(upToZ){
       for(let i=0;i<n;i++){
         const t=i/(n-1);
         const spr=new THREE.Sprite(orbMat.clone());
-        spr.scale.set(2.2,2.2,1);
+        spr.scale.set(2.9,2.9,1);
         spr.position.set(ox, baseY+Math.sin(t*Math.PI)*amp, z - t*16);
         scene.add(spr);
         orbs.push({ pos:spr.position, spr, taken:false, ph:Math.random()*6 });
@@ -476,7 +506,7 @@ function update(dt){
   // orbes
   for(const o of orbs){
     if(o.taken) continue;
-    if(o.pos.distanceToSquared(player.pos)<7){
+    if(o.pos.distanceToSquared(player.pos)<13){
       o.taken=true; o.spr.visible=false;
       orbCount++; orbChain++; orbChainTimer=4;
       score += 25 + orbChain*5;
@@ -495,21 +525,35 @@ function update(dt){
     }
   }
 
-  // collision buildings (AABB)
+  // collision buildings: atterrissage sur les toits, glissade sur les murs (jamais mortel)
+  player.onRoof=false;
   for(const b of buildings){
     if(Math.abs(player.pos.x-b.x)<b.w/2+0.5 &&
        Math.abs(player.pos.z-b.z)<b.d/2+0.5 &&
        player.pos.y < b.h+0.6){
-      // atterrissage sur le toit si on arrive par le haut
       if(player.pos.y > b.h-2 && player.vel.y<=0){
+        // toit: on atterrit et on court
         player.pos.y=b.h+0.6;
         if(player.vel.y<-18) addSparks(player.pos,5,'rgba(200,180,230,.9)','rgba(120,100,160,0)');
         player.vel.y=0;
+        player.onRoof=true;
         player.vel.z*=(1-0.6*dt);
         if(player.attached && player.anchor.y < b.h+3) detach();
       } else {
-        die('Splat sur un building!'); return;
+        // mur: on rebondit/glisse le long, avec un petit choc
+        const penX = b.w/2+0.5 - Math.abs(player.pos.x-b.x);
+        const penZ = b.d/2+0.5 - Math.abs(player.pos.z-b.z);
+        if(penX < penZ){
+          player.pos.x = b.x + Math.sign(player.pos.x-b.x)*(b.w/2+0.5);
+          player.vel.x *= -0.3;
+        } else {
+          player.pos.z = b.z + Math.sign(player.pos.z-b.z)*(b.d/2+0.5);
+          if(player.vel.z<0) player.vel.z *= 0.2; // gros freinage, mais on survit
+        }
+        addSparks(player.pos, 3, 'rgba(255,180,120,.9)','rgba(255,120,60,0)');
+        noise(0.08, 0.15, 400); rumble(0.3, 0.1, 60);
       }
+      break;
     }
   }
 
@@ -551,13 +595,38 @@ function die(msg){
 }
 
 // ================= RENDER =================
-const camPos=new THREE.Vector3(0,30,20), camLook=new THREE.Vector3();
+const camPos=new THREE.Vector3(0,30,20), camLook=new THREE.Vector3(), tmpV2=new THREE.Vector3();
 function render(dt){
-  // héros
+  // héros: orientation
   hero.position.copy(player.pos);
   const tilt=Math.atan2(-player.vel.y, -player.vel.z)*0.4;
-  hero.rotation.x=tilt;
-  hero.rotation.z=-steer*0.5;
+  hero.rotation.x = player.onRoof ? 0 : tilt;
+  hero.rotation.z = -steer*0.4 - player.vel.x*0.012; // penche dans le virage
+
+  // héros: pose des membres
+  if(player.attached){
+    // bras droit tendu vers l'ancrage, jambes qui traînent
+    tmpV.copy(player.anchor).sub(player.pos).normalize();
+    armR.rotation.x = Math.atan2(-tmpV.z, -tmpV.y);
+    armR.rotation.z = -0.15;
+    armL.rotation.x = 0.5 + Math.sin(time*3)*0.12; armL.rotation.z = 0.4;
+    legR.rotation.x = -0.55 + Math.sin(time*5)*0.14;
+    legL.rotation.x = -0.80 + Math.sin(time*5+1.4)*0.14;
+  } else if(player.onRoof){
+    // course sur le toit
+    const run=time*11;
+    armR.rotation.x=Math.sin(run)*0.9;         armR.rotation.z=-0.08;
+    armL.rotation.x=Math.sin(run+Math.PI)*0.9; armL.rotation.z=0.08;
+    legR.rotation.x=Math.sin(run+Math.PI)*0.95;
+    legL.rotation.x=Math.sin(run)*0.95;
+  } else {
+    // chute libre: bras écartés, jambes qui battent
+    armR.rotation.x=2.55+Math.sin(time*6)*0.15; armR.rotation.z=-0.7;
+    armL.rotation.x=2.55+Math.cos(time*6)*0.15; armL.rotation.z=0.7;
+    legR.rotation.x=-0.25+Math.sin(time*7)*0.3;
+    legL.rotation.x= 0.15+Math.cos(time*7)*0.3;
+  }
+  hero.updateMatrixWorld(true);
 
   // écharpe: décale le ruban
   for(let i=SCARF_N-1;i>0;i--){
@@ -568,11 +637,12 @@ function render(dt){
   scarfPos[0]=player.pos.x; scarfPos[1]=player.pos.y+0.6; scarfPos[2]=player.pos.z;
   scarfGeo.attributes.position.needsUpdate=true;
 
-  // toile
+  // toile: part de la main droite
   if(player.attached){
     webLine.visible=true;
+    handR.getWorldPosition(tmpV2);
     const wp=webGeo.attributes.position.array;
-    wp[0]=player.pos.x; wp[1]=player.pos.y+0.8; wp[2]=player.pos.z;
+    wp[0]=tmpV2.x; wp[1]=tmpV2.y; wp[2]=tmpV2.z;
     wp[3]=player.anchor.x; wp[4]=player.anchor.y; wp[5]=player.anchor.z;
     webGeo.attributes.position.needsUpdate=true;
   }
@@ -592,6 +662,19 @@ function render(dt){
     shake*=0.92; if(shake<0.02) shake=0;
   }
   camera.lookAt(camLook);
+
+  // buildings qui bloquent la vue → semi-transparents (fini le vol à l'aveugle)
+  for(const b of buildings){
+    let blocked=false;
+    for(const t of [0.35,0.55,0.75,0.9]){
+      const px=camera.position.x+(player.pos.x-camera.position.x)*t;
+      const py=camera.position.y+(player.pos.y-camera.position.y)*t;
+      const pz=camera.position.z+(player.pos.z-camera.position.z)*t;
+      if(Math.abs(px-b.x)<b.w/2+0.8 && Math.abs(pz-b.z)<b.d/2+0.8 && py<b.h){ blocked=true; break; }
+    }
+    const target=blocked?0.22:1;
+    b.mesh.material.opacity += (target-b.mesh.material.opacity)*Math.min(1,8*dt);
+  }
 
   // le ciel, le soleil et la rue suivent le joueur
   skyGroup.position.z=player.pos.z;
