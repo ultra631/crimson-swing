@@ -3694,11 +3694,11 @@ let W=window.innerWidth, H=window.innerHeight;
 
 // ================= THREE: scène de base =================
 const renderer = new THREE.WebGLRenderer({ canvas:cvs, antialias:true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.75));
 renderer.setSize(W, H);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xcfe3f2, 110, 520);
-const camera = new THREE.PerspectiveCamera(72, W/H, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(72, W/H, 0.1, 1000);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -3783,12 +3783,13 @@ function asphaltTexture(){
   g.fillStyle='rgba(240,240,240,.8)';
   g.fillRect(4,0,3,256); g.fillRect(121,0,3,256);
   const t=new THREE.CanvasTexture(c);
-  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1, 60);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1, 21);
   return t;
 }
-const road = new THREE.Mesh(new THREE.PlaneGeometry(15, 4000), new THREE.MeshLambertMaterial({ map:asphaltTexture() }));
+const roadMatL = new THREE.MeshLambertMaterial({ map:asphaltTexture(), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2 });
+const road = new THREE.Mesh(new THREE.PlaneGeometry(15, 1400), roadMatL);
 road.rotation.x = -Math.PI/2;
-road.position.y = 0.03;
+road.position.y = 0.09;
 road.receiveShadow = true;
 scene.add(road);
 
@@ -3876,7 +3877,7 @@ function normalizeModel(g){
 function cloneProto(w){
   const c=w.clone(true);
   const mats=[];
-  c.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); o.material.transparent=true; mats.push(o.material); } });
+  c.traverse(o=>{ if(o.isMesh){ o.material=o.material.clone(); mats.push(o.material); } });
   c.userData.mats=mats;
   c.userData.aspectX=w.userData.aspectX; c.userData.aspectZ=w.userData.aspectZ;
   return c;
@@ -4075,20 +4076,20 @@ function addBuilding(x,z){
     if(Math.random()<0.5) c.rotation.y=Math.PI;
     scene.add(c);
     buildings.push({ mesh:c, grp:c, mats:c.userData.mats, x, z, w, d, h });
-    return;
+    return roofAnchor(x,z,w,h);
   }
   // ---- fallback: boîtes texturées ----
   const w=8+Math.random()*10, d=8+Math.random()*10;
   const grp=new THREE.Group();
   const mat=buildingMats[(Math.random()*5)|0].clone(); // clone: transparence individuelle (la texture reste partagée)
-  mat.transparent=true; mat.opacity=1;
+  mat.opacity=1;
   const mesh=new THREE.Mesh(boxGeo, mat);
   mesh.scale.set(w,h,d);
   mesh.position.y=h/2;
   mesh.castShadow=true; mesh.receiveShadow=true;
   grp.add(mesh);
   // corniche
-  const ledgeMat=ledgeMatBase.clone(); ledgeMat.transparent=true;
+  const ledgeMat=ledgeMatBase.clone();
   const ledge=new THREE.Mesh(boxGeo, ledgeMat);
   ledge.scale.set(w+0.7, 0.55, d+0.7);
   ledge.position.y=h+0.22;
@@ -4105,6 +4106,15 @@ function addBuilding(x,z){
   grp.position.set(x, 0, z);
   scene.add(grp);
   buildings.push({ mesh, grp, mats:[mat,ledgeMat], x, z, w, d, h });
+  return roofAnchor(x,z,w,h);
+}
+// ancrage de toile posé sur le coin de toit côté rue (la toile s'accroche au building!)
+function roofAnchor(x,z,w,h){
+  if(h < 16) return false;                          // trop bas pour un swing utile
+  const ax = x - Math.sign(x||1)*(w/2 - 0.6);       // bord du toit côté rue
+  if(Math.abs(ax) > 26) return false;               // trop loin de la rue pour être atteignable
+  addAnchor(ax, h+0.5, z + (Math.random()*4-2));
+  return true;
 }
 // Props de rue: lampadaires et arbres sur les trottoirs
 const poleMat = new THREE.MeshLambertMaterial({ color:0x2f3338 });
@@ -4172,7 +4182,7 @@ const crossMat = new THREE.MeshLambertMaterial({ map:crossTexture, transparent:t
 function addCrosswalk(z){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(14.6, 5), crossMat);
   m.rotation.x=-Math.PI/2;
-  m.position.set(0, 0.06, z);
+  m.position.set(0, 0.16, z);
   m.receiveShadow=true;
   scene.add(m); props.push({ grp:m, z });
 }
@@ -4180,11 +4190,12 @@ function genWorld(upToZ){
   while(genZ > upToZ - 320){
     const z = genZ;
     // buildings sur les deux côtés (le couloir central reste ouvert)
-    addBuilding(-(18+Math.random()*34), z - Math.random()*10);
-    addBuilding( (18+Math.random()*34), z - Math.random()*10);
-    if(Math.random()<0.35) addBuilding((Math.random()<0.5?-1:1)*(52+Math.random()*16), z-5);
-    // ancrages dans le couloir
-    if(Math.random()<0.92) addAnchor((Math.random()*2-1)*16, 26+Math.random()*16, z - Math.random()*8);
+    let rowAnchors = 0;
+    if(addBuilding(-(18+Math.random()*30), z - Math.random()*10)) rowAnchors++;
+    if(addBuilding( (18+Math.random()*30), z - Math.random()*10)) rowAnchors++;
+    if(Math.random()<0.35 && addBuilding((Math.random()<0.5?-1:1)*(52+Math.random()*16), z-5)) rowAnchors++;
+    // filet de sécurité: si aucun toit accrochable dans la rangée, un point haut dans le couloir
+    if(rowAnchors===0) addAnchor((Math.random()*2-1)*12, 27+Math.random()*12, z - Math.random()*8);
     // arcs d'orbes
     if(Math.random()<0.6 && genZ<-60){
       const n=5, ox=(Math.random()*2-1)*12, baseY=10+Math.random()*10, amp=5+Math.random()*6;
@@ -4557,13 +4568,17 @@ function render(dt){
       if(Math.abs(px-b.x)<b.w/2+0.8 && Math.abs(pz-b.z)<b.d/2+0.8 && py<b.h){ blocked=true; break; }
     }
     const target=blocked?0.22:1;
-    for(const m of b.mats) m.opacity += (target-m.opacity)*Math.min(1,8*dt);
+    for(const m of b.mats){
+      m.opacity += (target-m.opacity)*Math.min(1,8*dt);
+      const tr = m.opacity < 0.98;
+      if(tr!==m.transparent){ m.transparent=tr; m.needsUpdate=true; } // transparent SEULEMENT pendant le fondu (perf)
+    }
   }
 
   // le ciel, le soleil, la rue et les trottoirs suivent le joueur
   skyGroup.position.z=player.pos.z;
   ground.position.z=player.pos.z-1000;
-  road.position.z=player.pos.z-1000;
+  road.position.z=player.pos.z-500;
   sidewalkL.position.z=player.pos.z-1000;
   sidewalkR.position.z=player.pos.z-1000;
   sun.position.set(player.pos.x+45, 85, player.pos.z-20);
@@ -4572,11 +4587,25 @@ function render(dt){
   renderer.render(scene, camera);
 }
 
+// qualité adaptative: si ça rame, on coupe les ombres et on baisse la résolution
+let perfAvg=16, perfT=0, qualityLowered=false;
+function lowerQuality(){
+  qualityLowered=true;
+  sun.castShadow=false;
+  renderer.shadowMap.enabled=false;
+  renderer.setPixelRatio(1);
+  renderer.setSize(W,H);
+  scene.fog.far=380;
+}
 let last=performance.now();
 function loop(now){
   requestAnimationFrame(loop);
   pollGamepad();
-  const dt=Math.min(0.033,(now-last)/1000); last=now;
+  const rawDt=(now-last)/1000; last=now;
+  const dt=Math.min(0.033, rawDt);
+  perfT+=rawDt;
+  perfAvg = perfAvg*0.95 + Math.min(rawDt*1000,100)*0.05;
+  if(!qualityLowered && perfT>4 && perfAvg>27) lowerQuality();
   update(dt);
   render(dt);
 }
